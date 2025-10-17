@@ -1,0 +1,384 @@
+-- =====================================================
+-- PHASE 7: PRODUCTION HARDENING - SECURITY & OPERATIONS
+-- Global Supply Chain Spoilage Forecasting Project
+-- RBAC, Resource Monitors, Network Policy, Governance
+-- =====================================================
+
+USE DATABASE GLOBAL_SPOILAGE_DB;
+
+-- =====================================================
+-- 1. ROLE CREATION & HIERARCHY
+-- =====================================================
+
+-- Create roles with least-privilege principle
+CREATE ROLE IF NOT EXISTS PLATFORM_ADMIN;
+CREATE ROLE IF NOT EXISTS DATA_ENGINEER_ROLE;
+CREATE ROLE IF NOT EXISTS DATA_SCIENTIST_ROLE;
+CREATE ROLE IF NOT EXISTS OPS_TASK_ROLE;
+CREATE ROLE IF NOT EXISTS OPS_MONITOR_ROLE;
+CREATE ROLE IF NOT EXISTS DASHBOARD_ROLE;
+CREATE ROLE IF NOT EXISTS READONLY_ROLE;
+
+-- Role hierarchy for inheritance
+GRANT ROLE READONLY_ROLE TO ROLE DASHBOARD_ROLE;
+GRANT ROLE DASHBOARD_ROLE TO ROLE OPS_MONITOR_ROLE;
+GRANT ROLE OPS_MONITOR_ROLE TO ROLE DATA_SCIENTIST_ROLE;
+GRANT ROLE DATA_SCIENTIST_ROLE TO ROLE DATA_ENGINEER_ROLE;
+GRANT ROLE DATA_ENGINEER_ROLE TO ROLE PLATFORM_ADMIN;
+
+-- Grant OPS_TASK_ROLE to PLATFORM_ADMIN for task ownership
+GRANT ROLE OPS_TASK_ROLE TO ROLE PLATFORM_ADMIN;
+
+-- =====================================================
+-- 2. WAREHOUSE GRANTS
+-- =====================================================
+
+-- Operations task role needs full warehouse access
+GRANT USAGE, OPERATE ON WAREHOUSE COMPUTE_WH TO ROLE OPS_TASK_ROLE;
+GRANT MONITOR ON WAREHOUSE COMPUTE_WH TO ROLE OPS_MONITOR_ROLE;
+
+-- Data roles need usage only
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE DATA_ENGINEER_ROLE;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE DATA_SCIENTIST_ROLE;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE DASHBOARD_ROLE;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE READONLY_ROLE;
+
+-- =====================================================
+-- 3. DATABASE & SCHEMA GRANTS
+-- =====================================================
+
+-- Database-level grants
+GRANT USAGE ON DATABASE GLOBAL_SPOILAGE_DB TO ROLE READONLY_ROLE;
+GRANT USAGE ON DATABASE GLOBAL_SPOILAGE_DB TO ROLE DATA_ENGINEER_ROLE;
+GRANT USAGE ON DATABASE GLOBAL_SPOILAGE_DB TO ROLE DATA_SCIENTIST_ROLE;
+GRANT USAGE ON DATABASE GLOBAL_SPOILAGE_DB TO ROLE OPS_TASK_ROLE;
+GRANT USAGE ON DATABASE GLOBAL_SPOILAGE_DB TO ROLE OPS_MONITOR_ROLE;
+
+-- RAW Schema: Read-only for most roles
+GRANT USAGE ON SCHEMA RAW TO ROLE READONLY_ROLE;
+GRANT USAGE ON SCHEMA RAW TO ROLE DATA_ENGINEER_ROLE;
+GRANT USAGE ON SCHEMA RAW TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA RAW TO ROLE READONLY_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA RAW TO ROLE DATA_ENGINEER_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA RAW TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON FUTURE TABLES IN SCHEMA RAW TO ROLE READONLY_ROLE;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA RAW TO ROLE DATA_ENGINEER_ROLE;
+
+-- CORE Schema: Engineers write, others read
+GRANT USAGE ON SCHEMA CORE TO ROLE READONLY_ROLE;
+GRANT USAGE ON SCHEMA CORE TO ROLE DATA_ENGINEER_ROLE;
+GRANT USAGE ON SCHEMA CORE TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA CORE TO ROLE READONLY_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA CORE TO ROLE DATA_ENGINEER_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA CORE TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON FUTURE TABLES IN SCHEMA CORE TO ROLE READONLY_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA CORE TO ROLE DATA_ENGINEER_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA CORE TO ROLE OPS_TASK_ROLE;
+
+-- FEAT Schema: Task role writes, scientists read
+GRANT USAGE ON SCHEMA FEAT TO ROLE READONLY_ROLE;
+GRANT USAGE ON SCHEMA FEAT TO ROLE DATA_SCIENTIST_ROLE;
+GRANT USAGE ON SCHEMA FEAT TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA FEAT TO ROLE READONLY_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA FEAT TO ROLE DATA_SCIENTIST_ROLE;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA FEAT TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON FUTURE TABLES IN SCHEMA FEAT TO ROLE READONLY_ROLE;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA FEAT TO ROLE DATA_SCIENTIST_ROLE;
+GRANT ALL PRIVILEGES ON FUTURE TABLES IN SCHEMA FEAT TO ROLE OPS_TASK_ROLE;
+
+-- ML Schema: Scientists and tasks write
+GRANT USAGE ON SCHEMA ML TO ROLE READONLY_ROLE;
+GRANT USAGE ON SCHEMA ML TO ROLE DATA_SCIENTIST_ROLE;
+GRANT USAGE ON SCHEMA ML TO ROLE OPS_TASK_ROLE;
+GRANT USAGE ON SCHEMA ML TO ROLE DASHBOARD_ROLE;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA ML TO ROLE READONLY_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA ML TO ROLE DASHBOARD_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ML TO ROLE DATA_SCIENTIST_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ML TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON FUTURE TABLES IN SCHEMA ML TO ROLE READONLY_ROLE;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA ML TO ROLE DASHBOARD_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA ML TO ROLE DATA_SCIENTIST_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA ML TO ROLE OPS_TASK_ROLE;
+
+-- OPS Schema: Task and monitor roles only
+GRANT USAGE ON SCHEMA OPS TO ROLE OPS_TASK_ROLE;
+GRANT USAGE ON SCHEMA OPS TO ROLE OPS_MONITOR_ROLE;
+GRANT USAGE ON SCHEMA OPS TO ROLE DASHBOARD_ROLE;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA OPS TO ROLE OPS_MONITOR_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA OPS TO ROLE DASHBOARD_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA OPS TO ROLE OPS_TASK_ROLE;
+
+GRANT SELECT ON FUTURE TABLES IN SCHEMA OPS TO ROLE OPS_MONITOR_ROLE;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA OPS TO ROLE DASHBOARD_ROLE;
+GRANT SELECT, INSERT, UPDATE, DELETE ON FUTURE TABLES IN SCHEMA OPS TO ROLE OPS_TASK_ROLE;
+
+-- =====================================================
+-- 4. TASK & STREAM PRIVILEGES
+-- =====================================================
+
+-- Task execution privileges
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE OPS_TASK_ROLE;
+GRANT EXECUTE MANAGED TASK ON ACCOUNT TO ROLE OPS_TASK_ROLE;
+
+-- Monitoring privileges
+GRANT MONITOR EXECUTION ON ACCOUNT TO ROLE OPS_MONITOR_ROLE;
+GRANT MONITOR USAGE ON ACCOUNT TO ROLE OPS_MONITOR_ROLE;
+
+-- =====================================================
+-- 5. GOVERNANCE SCHEMA & TAGS
+-- =====================================================
+
+-- Create governance schema
+CREATE SCHEMA IF NOT EXISTS GOV;
+
+GRANT USAGE ON SCHEMA GOV TO ROLE PLATFORM_ADMIN;
+GRANT USAGE ON SCHEMA GOV TO ROLE OPS_MONITOR_ROLE;
+GRANT SELECT ON ALL TABLES IN SCHEMA GOV TO ROLE OPS_MONITOR_ROLE;
+
+-- Data classification tag
+CREATE OR REPLACE TAG GOV.DATA_CLASSIFICATION 
+    ALLOWED_VALUES ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED')
+    COMMENT = 'Data sensitivity classification for governance';
+
+-- PII tag
+CREATE OR REPLACE TAG GOV.CONTAINS_PII
+    ALLOWED_VALUES ('YES', 'NO')
+    COMMENT = 'Indicates if table contains personally identifiable information';
+
+-- Environment tag
+CREATE OR REPLACE TAG GOV.ENVIRONMENT
+    ALLOWED_VALUES ('DEV', 'STG', 'PRD')
+    COMMENT = 'Deployment environment identifier';
+
+-- Compliance tag
+CREATE OR REPLACE TAG GOV.COMPLIANCE_SCOPE
+    ALLOWED_VALUES ('SOX', 'GDPR', 'HIPAA', 'NONE')
+    COMMENT = 'Regulatory compliance requirements';
+
+-- Apply tags to sensitive tables
+ALTER TABLE ML.PREDICTIONS SET TAG GOV.DATA_CLASSIFICATION = 'INTERNAL';
+ALTER TABLE ML.MODEL_RESULTS SET TAG GOV.DATA_CLASSIFICATION = 'INTERNAL';
+ALTER TABLE ML.MODEL_METADATA SET TAG GOV.DATA_CLASSIFICATION = 'INTERNAL';
+ALTER TABLE OPS.LOAD_AUDIT SET TAG GOV.DATA_CLASSIFICATION = 'INTERNAL';
+ALTER TABLE OPS.DASHBOARD_METRICS SET TAG GOV.DATA_CLASSIFICATION = 'PUBLIC';
+
+-- Set environment tags
+ALTER DATABASE GLOBAL_SPOILAGE_DB SET TAG GOV.ENVIRONMENT = 'PRD';
+
+-- =====================================================
+-- 6. RESOURCE MONITORS
+-- =====================================================
+
+-- Create resource monitor for cost control
+CREATE OR REPLACE RESOURCE MONITOR RM_GLOBAL_SPOILAGE
+    WITH 
+    CREDIT_QUOTA = 100
+    FREQUENCY = MONTHLY
+    START_TIMESTAMP = IMMEDIATELY
+    NOTIFY_TRIGGERS = (50, 75, 90, 100)
+    TRIGGERS 
+        ON 80 PERCENT DO NOTIFY
+        ON 90 PERCENT DO SUSPEND_IMMEDIATE
+        ON 100 PERCENT DO SUSPEND_IMMEDIATE;
+
+-- Apply resource monitor to warehouse
+ALTER WAREHOUSE COMPUTE_WH SET RESOURCE_MONITOR = RM_GLOBAL_SPOILAGE;
+
+-- Create smaller resource monitor for development
+CREATE OR REPLACE RESOURCE MONITOR RM_DEV_WORKLOADS
+    WITH 
+    CREDIT_QUOTA = 20
+    FREQUENCY = MONTHLY
+    START_TIMESTAMP = IMMEDIATELY
+    NOTIFY_TRIGGERS = (75, 90, 100)
+    TRIGGERS 
+        ON 90 PERCENT DO SUSPEND_IMMEDIATE
+        ON 100 PERCENT DO SUSPEND_IMMEDIATE;
+
+-- =====================================================
+-- 7. NETWORK POLICY (Example - Update with your IPs)
+-- =====================================================
+
+-- Create network policy for production security
+-- NOTE: Update ALLOWED_IP_LIST with your actual IP ranges
+CREATE OR REPLACE NETWORK POLICY OPS_NET_POLICY
+    ALLOWED_IP_LIST = (
+        '0.0.0.0/0'  -- Replace with your VPN CIDR or corporate IP ranges
+        -- '203.0.113.0/24',  -- Example: Corporate network
+        -- '198.51.100.10'    -- Example: VPN endpoint
+    )
+    BLOCKED_IP_LIST = ()
+    COMMENT = 'Network policy for Global Spoilage DB - restricts access to authorized IPs';
+
+-- Apply network policy at account level (COMMENTED OUT for safety)
+-- ALTER ACCOUNT SET NETWORK_POLICY = OPS_NET_POLICY;
+
+-- =====================================================
+-- 8. AUDIT & COMPLIANCE TABLES
+-- =====================================================
+
+-- Create audit log for security events
+CREATE OR REPLACE TABLE OPS.SECURITY_AUDIT (
+    audit_id STRING DEFAULT UUID_STRING(),
+    event_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    event_type STRING,
+    user_name STRING,
+    role_name STRING,
+    object_type STRING,
+    object_name STRING,
+    action STRING,
+    status STRING,
+    details VARIANT,
+    ip_address STRING,
+    session_id STRING,
+    PRIMARY KEY (audit_id)
+);
+
+-- Create compliance log
+CREATE OR REPLACE TABLE GOV.COMPLIANCE_LOG (
+    log_id STRING DEFAULT UUID_STRING(),
+    log_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    compliance_type STRING,
+    table_name STRING,
+    check_name STRING,
+    status STRING,
+    result VARIANT,
+    PRIMARY KEY (log_id)
+);
+
+-- Create data access log
+CREATE OR REPLACE TABLE OPS.DATA_ACCESS_LOG (
+    access_id STRING DEFAULT UUID_STRING(),
+    access_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    user_name STRING,
+    role_name STRING,
+    query_id STRING,
+    query_text STRING,
+    rows_produced NUMBER,
+    bytes_scanned NUMBER,
+    execution_time_ms NUMBER,
+    warehouse_name STRING
+);
+
+-- =====================================================
+-- 9. ROLE ASSIGNMENT TRACKING
+-- =====================================================
+
+CREATE OR REPLACE TABLE OPS.ROLE_ASSIGNMENTS (
+    assignment_id STRING DEFAULT UUID_STRING(),
+    user_name STRING,
+    role_name STRING,
+    granted_by STRING,
+    granted_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+    revoked_timestamp TIMESTAMP,
+    status STRING,
+    justification STRING,
+    PRIMARY KEY (assignment_id)
+);
+
+-- =====================================================
+-- 10. MASKING POLICIES (Example)
+-- =====================================================
+
+-- Create masking policy for sensitive data
+CREATE OR REPLACE MASKING POLICY GOV.MASK_CONFIDENTIAL AS (val STRING) RETURNS STRING ->
+    CASE
+        WHEN CURRENT_ROLE() IN ('PLATFORM_ADMIN', 'DATA_ENGINEER_ROLE') THEN val
+        ELSE '***MASKED***'
+    END
+    COMMENT = 'Masks confidential data for non-privileged roles';
+
+-- Create masking policy for numeric data
+CREATE OR REPLACE MASKING POLICY GOV.MASK_NUMERIC AS (val NUMBER) RETURNS NUMBER ->
+    CASE
+        WHEN CURRENT_ROLE() IN ('PLATFORM_ADMIN', 'DATA_SCIENTIST_ROLE') THEN val
+        ELSE NULL
+    END
+    COMMENT = 'Masks numeric sensitive data for non-privileged roles';
+
+-- =====================================================
+-- 11. ROW ACCESS POLICIES (Example)
+-- =====================================================
+
+-- Create row access policy for environment-based access
+CREATE OR REPLACE ROW ACCESS POLICY GOV.ENV_ACCESS_POLICY AS (env_tag STRING) RETURNS BOOLEAN ->
+    CASE
+        WHEN CURRENT_ROLE() = 'PLATFORM_ADMIN' THEN TRUE
+        WHEN CURRENT_ROLE() = 'DATA_ENGINEER_ROLE' AND env_tag IN ('DEV', 'STG', 'PRD') THEN TRUE
+        WHEN CURRENT_ROLE() = 'DATA_SCIENTIST_ROLE' AND env_tag IN ('DEV', 'STG') THEN TRUE
+        WHEN CURRENT_ROLE() = 'READONLY_ROLE' AND env_tag = 'PRD' THEN TRUE
+        ELSE FALSE
+    END
+    COMMENT = 'Controls row-level access based on environment tag';
+
+-- =====================================================
+-- 12. SESSION POLICIES
+-- =====================================================
+
+-- Create session policy for timeout
+CREATE OR REPLACE SESSION POLICY GOV.STANDARD_SESSION_POLICY
+    SESSION_IDLE_TIMEOUT_MINS = 60
+    SESSION_UI_IDLE_TIMEOUT_MINS = 30
+    COMMENT = 'Standard session timeout policy for security';
+
+-- =====================================================
+-- 13. WAREHOUSE CONFIGURATION HARDENING
+-- =====================================================
+
+-- Update warehouse with security best practices
+ALTER WAREHOUSE COMPUTE_WH SET
+    AUTO_SUSPEND = 300
+    AUTO_RESUME = TRUE
+    INITIALLY_SUSPENDED = TRUE
+    STATEMENT_TIMEOUT_IN_SECONDS = 3600
+    STATEMENT_QUEUED_TIMEOUT_IN_SECONDS = 600
+    COMMENT = 'Production warehouse with optimized settings';
+
+-- =====================================================
+-- 14. GRANT FILE FORMAT & STAGE PRIVILEGES
+-- =====================================================
+
+GRANT USAGE ON FILE FORMAT RAW.CSV_FILE_FORMAT TO ROLE DATA_ENGINEER_ROLE;
+GRANT USAGE ON FILE FORMAT RAW.CSV_FILE_FORMAT TO ROLE OPS_TASK_ROLE;
+
+GRANT READ ON STAGE RAW.KAGGLE_STAGE TO ROLE DATA_ENGINEER_ROLE;
+GRANT READ ON STAGE RAW.KAGGLE_STAGE TO ROLE OPS_TASK_ROLE;
+GRANT WRITE ON STAGE RAW.KAGGLE_STAGE TO ROLE DATA_ENGINEER_ROLE;
+GRANT WRITE ON STAGE RAW.KAGGLE_STAGE TO ROLE OPS_TASK_ROLE;
+
+-- =====================================================
+-- 15. SECURITY VALIDATION
+-- =====================================================
+
+-- Log Phase 7 security setup
+INSERT INTO OPS.LOAD_AUDIT (
+    execution_id,
+    phase,
+    step,
+    execution_ts,
+    status,
+    rows_affected,
+    execution_time_seconds,
+    error_message
+) VALUES (
+    'PHASE7_SECURITY_' || CURRENT_TIMESTAMP()::STRING,
+    'PHASE_7',
+    'SECURITY_OPS_SETUP',
+    CURRENT_TIMESTAMP(),
+    'SUCCESS',
+    0,
+    0,
+    NULL
+);
+
+-- Success message
+SELECT 'Phase 7: Security & Operations setup completed successfully!' AS status;
