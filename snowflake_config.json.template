@@ -1,0 +1,9 @@
+{
+  "account": "your-account.snowflakecomputing.com",
+  "user": "your-username",
+  "password": "your-password",
+  "warehouse": "COMPUTE_WH",
+  "database": "GLOBAL_SPOILAGE_DB",
+  "schema": "RAW",
+  "role": "ACCOUNTADMIN"
+}
