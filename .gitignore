@@ -41,6 +41,13 @@ logs/
 
 # Data files with long names
 kaggle_data/u.s.-treasury-securities-held-by-the-federal-reserve-maturing-in-over-1-year-to-5-years_metadata.json
+kaggle_data/u.s.-treasury-securities-held-by-the-federal-reserve-maturing-in-over-5-years-to-10-years_metadata.json
+kaggle_data/u.s.-treasury-securities-held-by-the-federal-reserve-maturing-in-over-10-years_metadata.json
+kaggle_data/u.s.-treasury-securities-held-by-the-federal-reserve-all-maturities_metadata.json
+
+# Large files that exceed GitHub limits
+kaggle_data/wdi-excel-zip-59-mb-/WDIEXCEL.xlsx
+kaggle_data/wdi-csv-zip-57-mb-/WDIData.csv
 
 # Sensitive files
 snowflake_config.json
